@@ -16,6 +16,7 @@ class removeSpecular:
 	def launch(self):
 		self.computeChromaticities()
 		self.removeFromRoiZeroValuedPixels()
+		self.computeSphericalCoordinates()
 		# self.plotRGBSpace()
 	def readImage(self,filename,resize=1.0):
 		"""read image and convert to float32"""
@@ -65,17 +66,43 @@ class removeSpecular:
 			for j in range(i+1,self.distanceChromaticities.shape[1]):
 				arrayj=self.thetaP[j]
 				self.distanceChromaticities[i,j]=cv2.norm(arrayi-arrayj,cv2.NORM_L1)
-		# iter
-		# iterDistanceChromaticities=np.nditer(self.distanceChromaticities,op_flags=['writeonly'])
-		# iterFirst=np.nditer(self.thetaP)
-		# while(not(iterDistanceChromaticities.finished)):
-			# while(not(iterFirst.finished)):
-			# 	array1=np.hstack((iterFirst.next(),iterFirst.next()))
-			# 	iterSecond=np.nditer(self.thetaP)
-			# 	while(not(iterSecond.finished)):
-			# 		array2=np.hstack((iterSecond.next(),iterSecond.next()))
-			# 		iterDistanceChromaticities[0]=cv2.norm(array1-array2,cv2.NORM_L1)
-			# 		iterDistanceChromaticities.next()
+	def computeL1Distance(self,p,q):
+		return cv2.norm(p-q,cv2.NORM_L1) 
+	def initClustering(self):
+		self.ROICluster=np.zeros(self.thetaP.shape[0],dtype='uint8')
+		unlabelledDotIndexes=(np.arange(self.ROICluster.shape[0]))
+		self.mn=np.zeros((1,2));self.mn[0,:]=np.array((np.inf,np.inf)) #the cluster of index 0 is of center +inf,+inf, and is added for homogeneity of indexes
+		T=np.pi/3
+
+		#add the first element and its value as the mean
+		self.N=1# number of clusters
+		self.ROICluster[0]=self.N
+		self.mn=np.vstack((self.mn,algo.thetaP[0,:]))
+		
+		##a list whose element is equal to True if it is an index of a labelled element
+		a=self.ROICluster!=0
+		
+		##a list whose element is equal to True if it is an index of an element associated with a NaN value
+		b=(np.transpose(np.isnan(self.thetaP))[0]+np.transpose(np.isnan(self.thetaP))[1])
+
+		##construction of the unlabelled indexes
+		unlabelledDotIndexes=unlabelledDotIndexes[np.logical_or(a,b)]
+		
+		# iterate throught the unlabelled pixels of self.thetaP
+		for index in unlabelledDotIndexes:
+			# for clusterMean in self.mn:
+			distanceToClusters=np.array([self.computeL1Distance(self.thetaP[index,:],clusterMean) for clusterMean in self.mn])
+			indexOfClosestCluster=np.argmin(distanceToClusters)
+			if (distanceToClusters[indexOfClosestCluster]<T):
+				# self.ROICluster[index]=indexOfClosestCluster
+				##here we update the mean of he corresponding clust
+				nbOfElementsOfCorrespondingCluster=(self.ROICluster==indexOfClosestCluster).sum()
+				self.mn[indexOfClosestCluster,:]=nbOfElementsOfCorrespondingCluster*self.mn[indexOfClosestCluster,:]+algo.thetaP[index,:]
+				self.mn[indexOfClosestCluster,:]/=(nbOfElementsOfCorrespondingCluster+1)
+				self.ROICluster[index]=indexOfClosestCluster
+			else:
+				self.N+=1
+				self.mn=np.vstack((self.mn,algo.thetaP[index,:]))
 	def printImagesWithEsc(self,*images):
 		"""in a unique window,show at the left and at the right, the image before and after the filtering"""
 		# concatenatedImages=np.hstack((self.image,self.diffuseImage))
@@ -119,4 +146,3 @@ class removeSpecular:
 if __name__ == "__main__":
 	algo=removeSpecular(sys.argv[1])
 	algo.launch()
-	algo.computeSphericalCoordinates()
