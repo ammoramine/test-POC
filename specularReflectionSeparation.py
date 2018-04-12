@@ -23,7 +23,7 @@ class removeSpecular:
 	def readImage(self,filename,resize=1.0):
 		"""read image and convert to float32"""
 		image=cv2.imread(filename)
-		image=scipy.misc.imresize(image,0.25)
+		# image=scipy.misc.imresize(image,0.25)
 		# image=scipy.misc.imresize(image,resize)
 		image=image.astype('float32')/255
 		return image
@@ -153,17 +153,22 @@ class removeSpecular:
 		k=cv2.waitKey()
 		if k==27:
 			cv2.destroyWindow(titleWindow)
-		# for i in range(0,len(images))
-		# cv2.namedWindow(titleWindow,cv2.WINDOW_AUTOSIZE)
-		# cv2.resizeWindow(titleWindow, 0.5)
-		# for i in range(0,len(images)):
-		# 	cv2.namedWindow(titleWindow,cv2.WINDOW_NORMAL)
-		# 	cv2.imshow(titleWindow,images[i])
-		# 	while(True):
-		# 		k=cv2.waitKey()
-		# 		if k==27:
-		# 			cv2.destroyWindow(titleWindow)
-		# 			break
+	def normalizeImage(self,image):
+		return (image-image.min())/(image.max()-image.min())
+
+	def printImagesWithEscWithNormalization(self,*images):
+		"""in a unique window,show at the left and at the right, the image before and after the filtering"""
+		# concatenatedImages=np.hstack((self.image,self.diffuseImage))
+		images=[self.normalizeImage(el) for el in list(images)]
+		titleWindow="a Window"
+		# for 
+		# tupleImages=images
+		concatenatedImages=np.hstack((images))
+		cv2.namedWindow(titleWindow,cv2.WINDOW_NORMAL)
+		cv2.imshow(titleWindow,concatenatedImages)
+		k=cv2.waitKey()
+		if k==27:
+			cv2.destroyWindow(titleWindow)
 	def printImageBeforeAndAfter(self):
 		"""in a unique window,show at the left and at the right, the image before and after the filtering"""
 		concatenatedImages=np.hstack((self.image,self.diffuse))
@@ -189,6 +194,7 @@ class removeSpecular:
 		fig = plt.figure()
 		ax = fig.add_subplot(111, projection='3d')
 		ax.scatter(R,G,B, c='r', marker= 'o')
+		ax.scatter(self.gammaR,self.gammaG,self.gammaB,c='k', marker= 'o',s=200)
 		ax.set_xlabel('R')
 		ax.set_ylabel('G')
 		ax.set_zlabel('B')
@@ -235,10 +241,10 @@ class removeSpecular:
 if __name__ == "__main__":
 	algo=removeSpecular(sys.argv[1])
 	algo.launch()
-	algo.initClustering()
+	# algo.initClustering()
 	# algo.updateClustering()
-	algo.computeMatingCoefficient()
-	algo.computeDiffusePart()
-	algo.computeSpecularPart()
+	# algo.computeMatingCoefficient()
+	# algo.computeDiffusePart()
+	# algo.computeSpecularPart()
 	# algo.printImageBeforeAndAfter()
 	# algo.plotRGBSpaceWithDiscriminationOfClusters()
