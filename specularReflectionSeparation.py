@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import scipy.misc
 import cv2.ximgproc
 import rand_cmap 
+import cv2.ml
 
 class removeSpecular:
 	def __init__(self,filename):
@@ -22,7 +23,7 @@ class removeSpecular:
 	def readImage(self,filename,resize=1.0):
 		"""read image and convert to float32"""
 		image=cv2.imread(filename)
-		# image=scipy.misc.imresize(image,0.25)
+		image=scipy.misc.imresize(image,0.25)
 		# image=scipy.misc.imresize(image,resize)
 		image=image.astype('float32')/255
 		return image
@@ -40,7 +41,7 @@ class removeSpecular:
 		self.gammaR=0.33333334
 		self.gammaB=0.33333334
 		self.theta=np.arctan((algo.G-self.gammaG)/(algo.R-self.gammaR))
-		self.phi=np.arctan((algo.B-self.gammaB)/((algo.G-self.gammaG)**2+(algo.R-self.gammaR)**2))
+		self.phi=np.arctan((algo.B-self.gammaB)/cv2.sqrt((algo.G-self.gammaG)**2+(algo.R-self.gammaR)**2))
 		self.radius=cv2.sqrt((algo.B-self.gammaB)**2+(algo.G-self.gammaG)**2+(algo.R-self.gammaR)**2)
 
 		self.deltaP=np.hstack((algo.theta.reshape(-1,1),algo.phi.reshape(-1,1)))
@@ -72,7 +73,7 @@ class removeSpecular:
 				self.distanceChromaticities[i,j]=cv2.norm(arrayi-arrayj,cv2.NORM_L1)
 	def computeL1Distance(self,p,q):
 		return cv2.norm(p-q,cv2.NORM_L1) 
-	def initClustering(self,T=np.pi/3):
+	def initClustering(self,T=np.pi/7):
 		self.ROICluster=np.zeros(self.deltaP.shape[0],dtype='uint8')# the value of each element of self.ROICluster represents the cluster to whom belongs the pixel with the associated index
 		unlabelledDotIndexes=(np.arange(self.ROICluster.shape[0]))
 		self.mn=np.zeros((1,2));self.mn[0,:]=np.array((np.inf,np.inf)) #the cluster of index 0 is of center +inf,+inf, and is added for homogeneity of indexes, it represents unclassified elements at the current iteration or outliers
@@ -114,12 +115,19 @@ class removeSpecular:
 				self.N+=1
 				self.mn=np.vstack((self.mn,algo.deltaP[index,:]))
 				self.ROICluster[index]=self.N
+	def updateClustering(self):
+		print('updating clustering by knn')
+		train=cv2.ml.TrainData_create(algo.deltaP, cv2.ml.ROW_SAMPLE,algo.ROICluster.astype('float32'))
+		knn = cv2.ml.KNearest_create()
+		knn.train(train)
+		algo.ROICluster=knn.predict(algo.deltaP)[1].astype('uint8')
 
 	def computeMatingCoefficient(self):
 		radii=self.radius.reshape(-1)
-		rmax=[radii[self.ROICluster==el].max() for el in range(0,self.mn.shape[0])]
+		rmax=np.array([radii[self.ROICluster==el].max() for el in range(1,self.mn.shape[0])])
+		rmax=np.hstack((np.NaN,rmax))
 		self.alpha=np.zeros(radii.shape,dtype='float32')
-		for el in range(0,self.mn.shape[0]):
+		for el in range(1,self.mn.shape[0]):
 			self.alpha[self.ROICluster==el]=radii[self.ROICluster==el]/rmax[el]
 		# self.alpha.reshape(self.image[0:2].shape)
 		self.alpha=self.alpha.reshape(self.image.shape[0:2])
@@ -137,19 +145,25 @@ class removeSpecular:
 		"""in a unique window,show at the left and at the right, the image before and after the filtering"""
 		# concatenatedImages=np.hstack((self.image,self.diffuseImage))
 		titleWindow="a Window"
+		# for 
 		# tupleImages=images
-		# concatenatedImages=np.hstack(tupleImages)
+		concatenatedImages=np.hstack((images))
+		cv2.namedWindow(titleWindow,cv2.WINDOW_NORMAL)
+		cv2.imshow(titleWindow,concatenatedImages)
+		k=cv2.waitKey()
+		if k==27:
+			cv2.destroyWindow(titleWindow)
 		# for i in range(0,len(images))
 		# cv2.namedWindow(titleWindow,cv2.WINDOW_AUTOSIZE)
 		# cv2.resizeWindow(titleWindow, 0.5)
-		for i in range(0,len(images)):
-			cv2.namedWindow(titleWindow,cv2.WINDOW_NORMAL)
-			cv2.imshow(titleWindow,images[i])
-			while(True):
-				k=cv2.waitKey()
-				if k==27:
-					cv2.destroyWindow(titleWindow)
-					break
+		# for i in range(0,len(images)):
+		# 	cv2.namedWindow(titleWindow,cv2.WINDOW_NORMAL)
+		# 	cv2.imshow(titleWindow,images[i])
+		# 	while(True):
+		# 		k=cv2.waitKey()
+		# 		if k==27:
+		# 			cv2.destroyWindow(titleWindow)
+		# 			break
 	def printImageBeforeAndAfter(self):
 		"""in a unique window,show at the left and at the right, the image before and after the filtering"""
 		concatenatedImages=np.hstack((self.image,self.diffuse))
@@ -185,7 +199,7 @@ class removeSpecular:
 	# 	RGB color; the keyword argument name must be a standard mpl colormap name.'''
 	# 	return plt.cm.get_cmap(name, n)
 
-	def plotRGBSpaceWithDiscriminationOfClusters(self):
+	def plotRGBSpaceWithDiscriminationOfClusters(self,clusters=None):
 		ROI=self.ROI.reshape(-1)
 		R=self.R.reshape(-1)
 		G=self.G.reshape(-1)
@@ -204,26 +218,27 @@ class removeSpecular:
 		cycol = cycle('bgrcmk')
 		# ax.scatter(X,Y, c=label, cmap=new_cmap, vmin=0, vmax=num_labels)
 		# for (int i in range(1,self.mn.shape[0])):
-		for i in range(1,nbClusters):
-			ax.scatter(R[self.ROICluster==i],G[self.ROICluster==i],B[self.ROICluster==i], c=next(cycol))
-			# ax.scatter(R[self.ROICluster==i],G[self.ROICluster==i],B[self.ROICluster==i], c=str(i), cmap=new_cmap, vmin=0, vmax=nbClusters)
+		if clusters==None:
+			for i in range(1,nbClusters):
+				ax.scatter(R[self.ROICluster==i],G[self.ROICluster==i],B[self.ROICluster==i], c=next(cycol))
+		else:
+			for i in clusters:
+				ax.scatter(R[self.ROICluster==i],G[self.ROICluster==i],B[self.ROICluster==i], c=next(cycol))
+
 		ax.set_xlabel('R')
 		ax.set_ylabel('G')
 		ax.set_zlabel('B')
 
 		ax.scatter(self.gammaR,self.gammaG,self.gammaB,c='k', marker= 'o',s=200)
 		plt.show()
-		# sumChromaticity=algo.R+algo.B+algo.G
-		# algo.R=algo.R[~np.isnan(sumChomaticity)]
-		# algo.G=algo.G[~np.isnan(sumChomaticity)]
-		# algo.B=algo.B[~np.isnan(sumChomaticity)]
+
 if __name__ == "__main__":
 	algo=removeSpecular(sys.argv[1])
 	algo.launch()
 	algo.initClustering()
-
+	# algo.updateClustering()
 	algo.computeMatingCoefficient()
 	algo.computeDiffusePart()
 	algo.computeSpecularPart()
-	algo.printImageBeforeAndAfter()
+	# algo.printImageBeforeAndAfter()
 	# algo.plotRGBSpaceWithDiscriminationOfClusters()
