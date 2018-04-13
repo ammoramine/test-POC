@@ -29,7 +29,7 @@ class removeSpecular:
 		self.computeMatingCoefficient()
 		self.computeDiffusePart()
 		self.computeSpecularPart()
-		self.printImageBeforeAndAfter()
+		# self.printImageBeforeAndAfter()
 		# self.plotRGBSpace()
 	def readImage(self,filename,resize=1.0):
 		"""read image and convert to float32"""
@@ -42,7 +42,6 @@ class removeSpecular:
 
 	def removeShadow(self):
 		algo.image=shadowRemoval.removeShadow(algo.image)
-
 	def estimateGamma(self,filename):
 		filenameOutput=os.path.splitext(filename)[0]+"Whitened"+os.path.splitext(filename)[1]
 		outputShell=subprocess.check_output(['./iic/iic',filename,filenameOutput])
@@ -99,7 +98,7 @@ class removeSpecular:
 	def computeL1Distance(self,p,q):
 		return cv2.norm(p-q,cv2.NORM_L1) 
 
-	def initClustering(self,T=np.pi/3):
+	def initClustering(self,T=np.pi/6):
 		self.ROICluster=np.zeros(self.deltaP.shape[0],dtype='uint8')# the value of each element of self.ROICluster represents the cluster to whom belongs the pixel with the associated index
 		unlabelledDotIndexes=(np.arange(self.ROICluster.shape[0]))
 		self.mn=np.zeros((1,2));self.mn[0,:]=np.array((np.inf,np.inf)) #the cluster of index 0 is of center +inf,+inf, and is added for homogeneity of indexes, it represents unclassified elements at the current iteration or outliers
@@ -147,6 +146,11 @@ class removeSpecular:
 		knn = cv2.ml.KNearest_create()
 		knn.train(train)
 		algo.ROICluster=knn.predict(algo.deltaP)[1].astype('uint8')
+
+
+	def plotClusters(self):
+		cluster=self.ROICluster.reshape(self.image.shape[0:2]).astype('float32')
+		self.printImagesWithEscWithNormalization(self.image,cv2.merge((cluster,cluster,cluster)))
 
 	def computeMatingCoefficient(self):
 		radii=self.radius.reshape(-1)
@@ -291,6 +295,9 @@ if __name__ == "__main__":
 		algo=removeSpecular(sys.argv[1])
 	
 	algo.launch()
+	# algo.printImagesWithEsc(algo.)
+	algo.plotClusters()
+	algo.printImageBeforeAndAfter()
 	# algo.initClustering()
 	# algo.updateClustering()
 	# algo.computeMatingCoefficient()
