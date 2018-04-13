@@ -9,24 +9,47 @@ import scipy.misc
 import cv2.ximgproc
 import rand_cmap 
 import cv2.ml
+import subprocess
+import os
+import re
+import pdb
+import shadowRemoval
 
 class removeSpecular:
-	def __init__(self,filename):
-		self.image=self.readImage(filename)
+	def __init__(self,filename,resize=1.0):
+		self.image=self.readImage(filename,resize)
 		# self.image=scipy.misc.imresize(self.image,0.125)
 		self.ROI=np.ones(self.image.shape[0:2],dtype=bool)
 	def launch(self):
 		self.computeChromaticities()
 		self.removeFromRoiZeroValuedPixels()
 		self.computeSphericalCoordinates()
+		self.initClustering()
+		# algo.updateClustering()
+		self.computeMatingCoefficient()
+		self.computeDiffusePart()
+		self.computeSpecularPart()
 		# self.plotRGBSpace()
 	def readImage(self,filename,resize=1.0):
 		"""read image and convert to float32"""
 		image=cv2.imread(filename)
-		# image=scipy.misc.imresize(image,0.25)
+		# self.estimateGamma(filename)
+		image=scipy.misc.imresize(image,resize)
 		# image=scipy.misc.imresize(image,resize)
-		image=image.astype('float32')/255
+		image=image.astype('float32')/255.0
 		return image
+
+	def removeShadow(self):
+		algo.image=shadowRemoval.removeShadow(algo.image)
+		
+	def estimateGamma(self,filename):
+		filenameOutput=os.path.splitext(filename)[0]+"Whitened"+os.path.splitext(filename)[1]
+		outputShell=subprocess.check_output(['./iic/iic',filename,filenameOutput])
+		outputShell=re.split(',|:',outputShell)
+		self.gammaR=float(outputShell[1])
+		self.gammaG=float(outputShell[2])
+		self.gammaB=float(outputShell[3])
+
 	def computeChromaticities(self):
 		self.RGBSum=self.image[...,0]+self.image[...,1]+self.image[...,2]
 		self.B=self.image[...,0]/self.RGBSum;self.G=self.image[...,1]/self.RGBSum;self.R=self.image[...,2]/self.RGBSum
@@ -36,6 +59,7 @@ class removeSpecular:
 		sumChromaticity=self.R+self.B+self.G
 		self.ROI=np.logical_and(self.ROI,np.logical_not(np.isnan(sumChromaticity)))
 
+	
 	def computeSphericalCoordinates(self):
 		self.gammaG=0.33333334
 		self.gammaR=0.33333334
@@ -73,7 +97,8 @@ class removeSpecular:
 				self.distanceChromaticities[i,j]=cv2.norm(arrayi-arrayj,cv2.NORM_L1)
 	def computeL1Distance(self,p,q):
 		return cv2.norm(p-q,cv2.NORM_L1) 
-	def initClustering(self,T=np.pi/7):
+
+	def initClustering(self,T=np.pi/3):
 		self.ROICluster=np.zeros(self.deltaP.shape[0],dtype='uint8')# the value of each element of self.ROICluster represents the cluster to whom belongs the pixel with the associated index
 		unlabelledDotIndexes=(np.arange(self.ROICluster.shape[0]))
 		self.mn=np.zeros((1,2));self.mn[0,:]=np.array((np.inf,np.inf)) #the cluster of index 0 is of center +inf,+inf, and is added for homogeneity of indexes, it represents unclassified elements at the current iteration or outliers
@@ -132,6 +157,8 @@ class removeSpecular:
 		# self.alpha.reshape(self.image[0:2].shape)
 		self.alpha=self.alpha.reshape(self.image.shape[0:2])
 		self.alpha=cv2.medianBlur(self.alpha,5)
+	# def reshapeAll(self):
+
 	def computeDiffusePart(self):
 		self.diffuse=np.zeros(self.image.shape)
 		self.diffuse[...,0]=(self.B-(1-self.alpha)*self.gammaB)*self.RGBSum
@@ -154,8 +181,26 @@ class removeSpecular:
 		if k==27:
 			cv2.destroyWindow(titleWindow)
 	def normalizeImage(self,image):
-		return (image-image.min())/(image.max()-image.min())
-
+		# if (len(image.shape)>2):
+		# 	nbChannel=1
+		# else
+		# channel=image.shape[2]
+		result=np.zeros(image.shape)
+		if (len(image.shape)==3):
+			channel=image.shape[2]
+			for k in range(0,channel):
+				imagek=image[...,k]
+				minValue=imagek.min()
+				maxValue=imagek.max()
+				result[...,k]=(imagek-minValue)/(maxValue-minValue)
+			return result
+		elif (len(image.shape)==2):
+			return (image-image.min())/(image.max()-image.min())
+		# min1=np.array((algo.image[...,0].min(),algo.image[...,1].min(),algo.image[...,2].min()))
+		# max1=np.array((algo.image[...,0].max(),algo.image[...,1].max(),algo.image[...,2].max()))
+		# result=np.zeros()
+		# return (image-min1)/(max1-min1)
+		# return normalizedImage
 	def printImagesWithEscWithNormalization(self,*images):
 		"""in a unique window,show at the left and at the right, the image before and after the filtering"""
 		# concatenatedImages=np.hstack((self.image,self.diffuseImage))
@@ -221,7 +266,7 @@ class removeSpecular:
 		# new_cmap = rand_cmap.rand_cmap(100, type='bright', first_color_black=True, last_color_black=False, verbose=True)
 		ax = fig.add_subplot(111, projection='3d')
 		from itertools import cycle
-		cycol = cycle('bgrcmk')
+		cycol = cycle('bgrcm')
 		# ax.scatter(X,Y, c=label, cmap=new_cmap, vmin=0, vmax=num_labels)
 		# for (int i in range(1,self.mn.shape[0])):
 		if clusters==None:
@@ -239,7 +284,11 @@ class removeSpecular:
 		plt.show()
 
 if __name__ == "__main__":
-	algo=removeSpecular(sys.argv[1])
+	if(len(sys.argv)>2):
+		algo=removeSpecular(sys.argv[1],float(sys.argv[2]))
+	else:
+		algo=removeSpecular(sys.argv[1])
+	
 	algo.launch()
 	# algo.initClustering()
 	# algo.updateClustering()
