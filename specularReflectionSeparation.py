@@ -29,6 +29,7 @@ class removeSpecular:
 		self.computeMatingCoefficient()
 		self.computeDiffusePart()
 		self.computeSpecularPart()
+		self.printImageBeforeAndAfter()
 		# self.plotRGBSpace()
 	def readImage(self,filename,resize=1.0):
 		"""read image and convert to float32"""
@@ -41,7 +42,7 @@ class removeSpecular:
 
 	def removeShadow(self):
 		algo.image=shadowRemoval.removeShadow(algo.image)
-		
+
 	def estimateGamma(self,filename):
 		filenameOutput=os.path.splitext(filename)[0]+"Whitened"+os.path.splitext(filename)[1]
 		outputShell=subprocess.check_output(['./iic/iic',filename,filenameOutput])
