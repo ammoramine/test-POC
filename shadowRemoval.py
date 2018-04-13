@@ -57,7 +57,7 @@ def readImage(filename):
 def writeImage(filename,filteredImageBGR):
 
 	filenameOutput=os.path.splitext(filename)[0]+"WithoutShadow"+os.path.splitext(filename)[1]
-	cv2.imwrite(filenameOutput,filteredImageBGR)
+	cv2.imwrite(filenameOutput,(filteredImageBGR*255).astype('uint8'))
 # def removeShadow(imageBGR):
 
 
@@ -100,7 +100,7 @@ if __name__ == "__main__":
 	# v=cv2.merge((filteredImageRGB[...,2],filteredImageRGB[...,1],filteredImageRGB[...,0]))
 
 	filenameOutput=os.path.splitext(filename)[0]+"WithoutShadow"+os.path.splitext(filename)[1]
-	cv2.imwrite(filenameOutput,filteredImageBGR)
+	cv2.imwrite(filenameOutput,(filteredImageBGR*255).astype('uint8'))
 	print("look at your screen !")
 	printImagesWithEsc(imageBGR,filteredImageBGR)
 
