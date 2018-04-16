@@ -26,6 +26,12 @@ def removeShadow(imageBGR):
 	filteredImageRGB=matplotlib.colors.hsv_to_rgb(filteredImageHSV)
 
 	filteredImageBGR=cv2.merge((filteredImageRGB[...,2],filteredImageRGB[...,1],filteredImageRGB[...,0]))
+
+	# differenceBrightness=logBritness-filteredLogBrightness
+	# differenceBrightnessNormalized=(differenceBrightness-differenceBrightness.min())/(differenceBrightness.max()-differenceBrightness.min())
+	# printImagesWithEscWithNormalization(logBritness,filteredLogBrightness,differenceBrightness)
+	# printImagesWithEsc(logBritness,filteredLogBrightness,differenceBrightnessNormalized)
+	
 	return filteredImageBGR
 
 def computeButterWorthFilter(shapeFilter):
@@ -76,6 +82,44 @@ def printImagesWithEsc(*images):
 			cv2.destroyWindow(titleWindow)
 			break
 
+def normalizeImage(image):
+	# if (len(image.shape)>2):
+	# 	nbChannel=1
+	# else
+	# channel=image.shape[2]
+	result=np.zeros(image.shape)
+	if (len(image.shape)==3):
+		channel=image.shape[2]
+		for k in range(0,channel):
+			imagek=image[...,k]
+			minValue=imagek.min()
+			maxValue=imagek.max()
+			result[...,k]=(imagek-minValue)/(maxValue-minValue)
+		return result
+	elif (len(image.shape)==2):
+		return (image-image.min())/(image.max()-image.min())
+	# min1=np.array((algo.image[...,0].min(),algo.image[...,1].min(),algo.image[...,2].min()))
+	# max1=np.array((algo.image[...,0].max(),algo.image[...,1].max(),algo.image[...,2].max()))
+	# result=np.zeros()
+	# return (image-min1)/(max1-min1)
+	# return normalizedImage
+def printImagesWithEscWithNormalization(*images):
+	"""in a unique window,show at the left and at the right, the image before and after the filtering"""
+	# concatenatedImages=np.hstack((self.image,self.diffuseImage))
+	images=[normalizeImage(el) for el in list(images)]
+	titleWindow="a Window"
+	# for 
+	# tupleImages=images
+	concatenatedImages=np.hstack((images))
+	cv2.namedWindow(titleWindow,cv2.WINDOW_NORMAL)
+	cv2.imshow(titleWindow,concatenatedImages)
+	k=cv2.waitKey()
+	while(True):
+		k=cv2.waitKey()
+		if k==27:
+			cv2.destroyWindow(titleWindow)
+			break
+
 if __name__ == "__main__":
 	filename=sys.argv[1]
 	imageBGR=readImage(filename)
@@ -102,5 +146,5 @@ if __name__ == "__main__":
 	filenameOutput=os.path.splitext(filename)[0]+"WithoutShadow"+os.path.splitext(filename)[1]
 	cv2.imwrite(filenameOutput,(filteredImageBGR*255).astype('uint8'))
 	print("look at your screen !")
-	printImagesWithEsc(imageBGR,filteredImageBGR)
+	printImagesWithEsc(imageBGR,filteredImageBGR,imageBGR/filteredImageBGR)
 
